@@ -1,0 +1,165 @@
+basePath: /
+definitions:
+  handler.loginRequest:
+    properties:
+      account:
+        type: string
+      password:
+        type: string
+    type: object
+  handler.loginResponse:
+    properties:
+      access_token:
+        type: string
+      refresh_token:
+        type: string
+    type: object
+  handler.messageResponse:
+    properties:
+      message:
+        type: string
+    type: object
+  handler.registerRequest:
+    properties:
+      password:
+        type: string
+      token:
+        type: string
+      username:
+        type: string
+    type: object
+  handler.registerResponse:
+    properties:
+      data:
+        $ref: '#/definitions/handler.registerUserResponse'
+      message:
+        type: string
+    type: object
+  handler.registerUserResponse:
+    properties:
+      email:
+        type: string
+      id:
+        type: string
+      is_verify:
+        type: boolean
+      role:
+        type: string
+      status:
+        type: string
+      username:
+        type: string
+    type: object
+  handler.sendRegisterOTPRequest:
+    properties:
+      email:
+        type: string
+    type: object
+  handler.verifyRegisterOTPRequest:
+    properties:
+      email:
+        type: string
+      otp:
+        type: string
+    type: object
+  handler.verifyRegisterOTPResponse:
+    properties:
+      message:
+        type: string
+      token:
+        type: string
+    type: object
+host: localhost:6969
+info:
+  contact: {}
+  description: API documentation for MXH backend.
+  title: MXH Backend API
+  version: "1.0"
+paths:
+  /api/auth/login.json:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Login request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.loginRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.loginResponse'
+      summary: Login user
+      tags:
+      - Auth
+  /api/auth/register.json:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Register request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.registerRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.registerResponse'
+      summary: Register user
+      tags:
+      - Auth
+  /api/auth/register/otp.json:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Email request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.sendRegisterOTPRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.messageResponse'
+      summary: Send register OTP
+      tags:
+      - Auth
+  /api/auth/register/otp/verify.json:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: OTP verify request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.verifyRegisterOTPRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.verifyRegisterOTPResponse'
+      summary: Verify register OTP
+      tags:
+      - Auth
+schemes:
+- http
+swagger: "2.0"
