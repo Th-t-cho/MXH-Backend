@@ -1,5 +1,32 @@
 basePath: /
 definitions:
+  handler.conversationResponse:
+    properties:
+      data: {}
+      message:
+        type: string
+      status:
+        type: boolean
+    type: object
+  handler.createDirectConversationRequest:
+    properties:
+      user_id:
+        type: string
+    type: object
+  handler.forgotPasswordOTPRequest:
+    properties:
+      email:
+        type: string
+    type: object
+  handler.forgotPasswordVerifyResponse:
+    properties:
+      message:
+        type: string
+      status:
+        type: boolean
+      token:
+        type: string
+    type: object
   handler.loginRequest:
     properties:
       account:
@@ -11,13 +38,27 @@ definitions:
     properties:
       access_token:
         type: string
+      message:
+        type: string
       refresh_token:
         type: string
+      status:
+        type: boolean
+    type: object
+  handler.messageListResponse:
+    properties:
+      data: {}
+      message:
+        type: string
+      status:
+        type: boolean
     type: object
   handler.messageResponse:
     properties:
       message:
         type: string
+      status:
+        type: boolean
     type: object
   handler.registerRequest:
     properties:
@@ -34,6 +75,8 @@ definitions:
         $ref: '#/definitions/handler.registerUserResponse'
       message:
         type: string
+      status:
+        type: boolean
     type: object
   handler.registerUserResponse:
     properties:
@@ -50,9 +93,23 @@ definitions:
       username:
         type: string
     type: object
+  handler.resetPasswordRequest:
+    properties:
+      new_password:
+        type: string
+      token:
+        type: string
+    type: object
   handler.sendRegisterOTPRequest:
     properties:
       email:
+        type: string
+    type: object
+  handler.verifyForgotPasswordOTPRequest:
+    properties:
+      email:
+        type: string
+      otp:
         type: string
     type: object
   handler.verifyRegisterOTPRequest:
@@ -66,6 +123,8 @@ definitions:
     properties:
       message:
         type: string
+      status:
+        type: boolean
       token:
         type: string
     type: object
@@ -76,6 +135,69 @@ info:
   title: MXH Backend API
   version: "1.0"
 paths:
+  /api/auth/forgot-password/otp.json:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Forgot password OTP request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.forgotPasswordOTPRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.messageResponse'
+      summary: Send forgot password OTP
+      tags:
+      - Auth
+  /api/auth/forgot-password/otp/verify.json:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Forgot password OTP verify request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.verifyForgotPasswordOTPRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.forgotPasswordVerifyResponse'
+      summary: Verify forgot password OTP
+      tags:
+      - Auth
+  /api/auth/forgot-password/reset.json:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Reset password request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.resetPasswordRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.messageResponse'
+      summary: Reset password
+      tags:
+      - Auth
   /api/auth/login.json:
     post:
       consumes:
@@ -160,6 +282,81 @@ paths:
       summary: Verify register OTP
       tags:
       - Auth
+  /api/conversations.json:
+    get:
+      parameters:
+      - description: Bearer access token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.conversationResponse'
+      summary: List conversations
+      tags:
+      - Chat
+  /api/conversations/{id}/messages.json:
+    get:
+      parameters:
+      - description: Bearer access token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Conversation ID
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Page
+        in: query
+        name: page
+        type: integer
+      - description: Limit
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.messageListResponse'
+      summary: List conversation messages
+      tags:
+      - Chat
+  /api/conversations/direct.json:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Bearer access token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Direct conversation request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.createDirectConversationRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.conversationResponse'
+      summary: Create direct conversation
+      tags:
+      - Chat
 schemes:
 - http
 swagger: "2.0"

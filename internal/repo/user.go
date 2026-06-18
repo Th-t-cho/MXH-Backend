@@ -53,20 +53,36 @@ func NormalizeEmail(email string) string {
 }
 
 func CreateRegisterOTP(email string, codeHash string, expiresAt time.Time) error {
+	return createUserOTP(email, codeHash, "register", expiresAt)
+}
+
+func CreatePasswordResetOTP(email string, codeHash string, expiresAt time.Time) error {
+	return createUserOTP(email, codeHash, "forgot_password", expiresAt)
+}
+
+func createUserOTP(email string, codeHash string, purpose string, expiresAt time.Time) error {
 	otp := model.UserOTP{
 		Email:     NormalizeEmail(email),
 		CodeHash:  codeHash,
-		Purpose:   "register",
+		Purpose:   purpose,
 		ExpiresAt: expiresAt,
 	}
 	return app.Database.DB.Create(&otp).Error
 }
 
 func VerifyRegisterOTP(email string, codeHash string, consume bool) error {
+	return verifyUserOTP(email, codeHash, "register", consume)
+}
+
+func VerifyPasswordResetOTP(email string, codeHash string, consume bool) error {
+	return verifyUserOTP(email, codeHash, "forgot_password", consume)
+}
+
+func verifyUserOTP(email string, codeHash string, purpose string, consume bool) error {
 	now := time.Now()
 	otp := model.UserOTP{}
 	err := app.Database.DB.
-		Where("email = ? AND purpose = ? AND consumed_at IS NULL", NormalizeEmail(email), "register").
+		Where("email = ? AND purpose = ? AND consumed_at IS NULL", NormalizeEmail(email), purpose).
 		Order("created_at DESC").
 		First(&otp).Error
 	if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -92,4 +108,10 @@ func VerifyRegisterOTP(email string, codeHash string, consume bool) error {
 		}).Error
 	}
 	return app.Database.DB.Model(&otp).Update("attempts", otp.Attempts+1).Error
+}
+
+func UpdateUserPassword(userID uuid.UUID, password string) error {
+	return app.Database.DB.Model(&model.User{}).
+		Where("id = ?", userID).
+		Update("password", password).Error
 }

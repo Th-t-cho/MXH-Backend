@@ -24,6 +24,14 @@ type resendEmailRequest struct {
 }
 
 func SendRegisterOTP(email string, otp string, expiresIn time.Duration) error {
+	return sendOTPEmail(email, otp, expiresIn, "Register OTP", "Your verification code")
+}
+
+func SendForgotPasswordOTP(email string, otp string, expiresIn time.Duration) error {
+	return sendOTPEmail(email, otp, expiresIn, "Forgot password OTP", "Your password reset code")
+}
+
+func sendOTPEmail(email string, otp string, expiresIn time.Duration, logLabel string, subject string) error {
 	provider := strings.ToLower(strings.TrimSpace(app.Config("EMAIL_PROVIDER")))
 	if provider == "" {
 		provider = "console"
@@ -31,18 +39,18 @@ func SendRegisterOTP(email string, otp string, expiresIn time.Duration) error {
 
 	switch provider {
 	case "console":
-		logrus.Infof("Register OTP for %s: %s (expires in %s)", email, otp, expiresIn.String())
+		logrus.Infof("%s for %s: %s (expires in %s)", logLabel, email, otp, expiresIn.String())
 		return nil
 	case "resend":
-		return sendRegisterOTPWithResend(email, otp, expiresIn)
+		return sendOTPWithResend(email, otp, expiresIn, subject)
 	case "smtp":
-		return sendRegisterOTPWithSMTP(email, otp, expiresIn)
+		return sendOTPWithSMTP(email, otp, expiresIn, subject)
 	default:
 		return fmt.Errorf("unsupported EMAIL_PROVIDER: %s", provider)
 	}
 }
 
-func sendRegisterOTPWithResend(email string, otp string, expiresIn time.Duration) error {
+func sendOTPWithResend(email string, otp string, expiresIn time.Duration, subject string) error {
 	apiKey := strings.TrimSpace(app.Config("RESEND_API_KEY"))
 	from := strings.TrimSpace(app.Config("MAIL_FROM"))
 	if apiKey == "" {
@@ -55,9 +63,10 @@ func sendRegisterOTPWithResend(email string, otp string, expiresIn time.Duration
 	body := resendEmailRequest{
 		From:    from,
 		To:      []string{email},
-		Subject: "Your verification code",
+		Subject: subject,
 		HTML: fmt.Sprintf(
-			`<p>Your verification code is <strong>%s</strong>.</p><p>This code expires in %d minutes.</p>`,
+			`<p>%s is <strong>%s</strong>.</p><p>This code expires in %d minutes.</p>`,
+			subject,
 			otp,
 			int(expiresIn.Minutes()),
 		),
@@ -88,7 +97,7 @@ func sendRegisterOTPWithResend(email string, otp string, expiresIn time.Duration
 	return nil
 }
 
-func sendRegisterOTPWithSMTP(email string, otp string, expiresIn time.Duration) error {
+func sendOTPWithSMTP(email string, otp string, expiresIn time.Duration, subject string) error {
 	host := strings.TrimSpace(app.Config("SMTP_HOST"))
 	port := strings.TrimSpace(app.Config("SMTP_PORT"))
 	username := strings.TrimSpace(app.Config("SMTP_USERNAME"))
@@ -122,9 +131,9 @@ func sendRegisterOTPWithSMTP(email string, otp string, expiresIn time.Duration) 
 		return errors.New("SMTP_PORT is invalid")
 	}
 
-	subject := "Your verification code"
 	html := fmt.Sprintf(
-		`<p>Your verification code is <strong>%s</strong>.</p><p>This code expires in %d minutes.</p>`,
+		`<p>%s is <strong>%s</strong>.</p><p>This code expires in %d minutes.</p>`,
+		subject,
 		otp,
 		int(expiresIn.Minutes()),
 	)

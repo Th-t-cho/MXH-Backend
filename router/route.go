@@ -6,6 +6,7 @@ import (
 	"core/internal/handler"
 	"fmt"
 
+	"github.com/gofiber/contrib/websocket"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
 	"github.com/gofiber/fiber/v2/middleware/logger"
@@ -34,6 +35,7 @@ func Setup() {
 
 func setupRouter(fiber_app *fiber.App) {
 	fiber_app.Get("/swagger/*", fiberSwagger.New())
+	fiber_app.Get("/ws/chat", websocket.New(handler.ChatWebSocket))
 
 	api := fiber_app.Group("/api", logger.New())
 
@@ -45,4 +47,11 @@ func setupRouter(fiber_app *fiber.App) {
 	api.Post("/auth/register/otp/verify.json", handler.VerifyRegisterOTP)
 	api.Post("/auth/register.json", handler.Register)
 	api.Post("/auth/login.json", handler.Login)
+	api.Post("/auth/forgot-password/otp.json", handler.SendForgotPasswordOTP)
+	api.Post("/auth/forgot-password/otp/verify.json", handler.VerifyForgotPasswordOTP)
+	api.Post("/auth/forgot-password/reset.json", handler.ResetPassword)
+
+	api.Post("/conversations/direct.json", handler.CreateDirectConversation)
+	api.Get("/conversations.json", handler.ListConversations)
+	api.Get("/conversations/:id/messages.json", handler.ListMessages)
 }

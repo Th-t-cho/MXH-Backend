@@ -98,6 +98,9 @@ func (dbConf *DatabaseConfig) Setup() {
 	models := []interface{}{
 		&model.User{},
 		&model.UserOTP{},
+		&model.Conversation{},
+		&model.ConversationMember{},
+		&model.Message{},
 	}
 
 	for _, m := range models {
