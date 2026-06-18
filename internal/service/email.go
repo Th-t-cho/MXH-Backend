@@ -3,9 +3,11 @@ package service
 import (
 	"bytes"
 	"core/app"
+	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"net/mail"
 	"net/smtp"
@@ -148,11 +150,83 @@ func sendOTPWithSMTP(email string, otp string, expiresIn time.Duration, subject 
 	}, "\r\n")
 
 	auth := smtp.PlainAuth("", username, password, host)
-	return smtp.SendMail(
+	return sendSMTPMailWithTimeout(
 		fmt.Sprintf("%s:%d", host, portNumber),
+		host,
 		auth,
 		fromAddress,
 		[]string{email},
 		[]byte(message),
 	)
+}
+
+func sendSMTPMailWithTimeout(addr string, host string, auth smtp.Auth, from string, to []string, message []byte) error {
+	timeout := smtpTimeout()
+	dialer := net.Dialer{Timeout: timeout}
+
+	conn, err := dialer.Dial("tcp", addr)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	if err := conn.SetDeadline(time.Now().Add(timeout)); err != nil {
+		return err
+	}
+
+	client, err := smtp.NewClient(conn, host)
+	if err != nil {
+		return err
+	}
+	defer client.Close()
+
+	if err := client.Hello("localhost"); err != nil {
+		return err
+	}
+
+	if ok, _ := client.Extension("STARTTLS"); ok {
+		if err := client.StartTLS(&tls.Config{ServerName: host, MinVersion: tls.VersionTLS12}); err != nil {
+			return err
+		}
+	}
+
+	if auth != nil {
+		if ok, _ := client.Extension("AUTH"); !ok {
+			return errors.New("smtp auth is not supported")
+		}
+		if err := client.Auth(auth); err != nil {
+			return err
+		}
+	}
+
+	if err := client.Mail(from); err != nil {
+		return err
+	}
+	for _, recipient := range to {
+		if err := client.Rcpt(recipient); err != nil {
+			return err
+		}
+	}
+
+	writer, err := client.Data()
+	if err != nil {
+		return err
+	}
+	if _, err := writer.Write(message); err != nil {
+		_ = writer.Close()
+		return err
+	}
+	if err := writer.Close(); err != nil {
+		return err
+	}
+
+	return client.Quit()
+}
+
+func smtpTimeout() time.Duration {
+	seconds, err := strconv.Atoi(app.Config("SMTP_TIMEOUT_SECONDS"))
+	if err != nil || seconds <= 0 {
+		seconds = 10
+	}
+	return time.Duration(seconds) * time.Second
 }

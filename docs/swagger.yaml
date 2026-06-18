@@ -105,6 +105,15 @@ definitions:
       email:
         type: string
     type: object
+  handler.uploadMediaResponse:
+    properties:
+      data:
+        $ref: '#/definitions/service.UploadedMedia'
+      message:
+        type: string
+      status:
+        type: boolean
+    type: object
   handler.verifyForgotPasswordOTPRequest:
     properties:
       email:
@@ -126,6 +135,17 @@ definitions:
       status:
         type: boolean
       token:
+        type: string
+    type: object
+  service.UploadedMedia:
+    properties:
+      key:
+        type: string
+      mime_type:
+        type: string
+      size:
+        type: integer
+      url:
         type: string
     type: object
 host: localhost:6969
@@ -357,6 +377,31 @@ paths:
       summary: Create direct conversation
       tags:
       - Chat
+  /api/media/upload.json:
+    post:
+      consumes:
+      - multipart/form-data
+      parameters:
+      - description: Bearer access token
+        in: header
+        name: Authorization
+        required: true
+        type: string
+      - description: Image or video file
+        in: formData
+        name: file
+        required: true
+        type: file
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/handler.uploadMediaResponse'
+      summary: Upload media
+      tags:
+      - Media
 schemes:
 - http
 swagger: "2.0"

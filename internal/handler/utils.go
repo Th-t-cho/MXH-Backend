@@ -190,6 +190,14 @@ func currentUserFromRequest(c *fiber.Ctx) (model.User, error) {
 	return currentUserFromToken(token)
 }
 
+func currentUserFromContext(c *fiber.Ctx) (model.User, error) {
+	user, ok := c.Locals("user").(model.User)
+	if !ok {
+		return model.User{}, errors.New("missing user context")
+	}
+	return user, nil
+}
+
 func currentUserFromToken(tokenString string) (model.User, error) {
 	tokenString = strings.TrimSpace(tokenString)
 	if tokenString == "" {

@@ -4,7 +4,9 @@ import (
 	mainapp "core/app"
 	_ "core/docs"
 	"core/internal/handler"
+	"core/internal/middleware"
 	"fmt"
+	"strconv"
 
 	"github.com/gofiber/contrib/websocket"
 	"github.com/gofiber/fiber/v2"
@@ -16,7 +18,7 @@ import (
 
 func Setup() {
 	app := fiber.New(fiber.Config{
-		BodyLimit: 6 * 1024 * 1024, // Limit request body size to 6MB (accommodates 5MB files).
+		BodyLimit: uploadBodyLimit(),
 	})
 
 	app.Use(cors.New())
@@ -24,7 +26,10 @@ func Setup() {
 
 	setupRouter(app)
 
-	port := mainapp.Config("WEB_PORT")
+	port := mainapp.Config("PORT")
+	if len(port) == 0 {
+		port = mainapp.Config("WEB_PORT")
+	}
 	if len(port) == 0 {
 		port = "6969"
 	}
@@ -51,7 +56,19 @@ func setupRouter(fiber_app *fiber.App) {
 	api.Post("/auth/forgot-password/otp/verify.json", handler.VerifyForgotPasswordOTP)
 	api.Post("/auth/forgot-password/reset.json", handler.ResetPassword)
 
-	api.Post("/conversations/direct.json", handler.CreateDirectConversation)
-	api.Get("/conversations.json", handler.ListConversations)
-	api.Get("/conversations/:id/messages.json", handler.ListMessages)
+	chat := api.Group("", middleware.UserAuth)
+	chat.Post("/conversations/direct.json", handler.CreateDirectConversation)
+	chat.Get("/conversations.json", handler.ListConversations)
+	chat.Get("/conversations/:id/messages.json", handler.ListMessages)
+
+	media := api.Group("/media", middleware.UserAuth)
+	media.Post("/upload.json", handler.UploadMedia)
+}
+
+func uploadBodyLimit() int {
+	megabytes, err := strconv.Atoi(mainapp.Config("UPLOAD_MAX_MB"))
+	if err != nil || megabytes <= 0 {
+		megabytes = 50
+	}
+	return megabytes * 1024 * 1024
 }

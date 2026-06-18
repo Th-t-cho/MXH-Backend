@@ -16,7 +16,7 @@ func Authen(c *fiber.Ctx) error {
 		return c.Next()
 	} else {
 		return jwtware.New(jwtware.Config{
-			SigningKey:     []byte(app.Config("SECRETKEY")),
+			SigningKey:     []byte(jwtSecret()),
 			ErrorHandler:   jwtError,
 			SuccessHandler: jwtSuccess,
 			ContextKey:     "token",
@@ -25,8 +25,47 @@ func Authen(c *fiber.Ctx) error {
 
 }
 
+func UserAuth(c *fiber.Ctx) error {
+	return jwtware.New(jwtware.Config{
+		SigningKey:     []byte(jwtSecret()),
+		ErrorHandler:   jwtError,
+		SuccessHandler: userJWTSuccess,
+		ContextKey:     "token",
+	})(c)
+}
+
 func jwtError(c *fiber.Ctx, err error) error {
 	return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"status": false, "message": "Invalid or expired JWT"})
+}
+
+func userJWTSuccess(c *fiber.Ctx) error {
+	claims := c.Locals("token").(*jwt.Token).Claims.(jwt.MapClaims)
+	tokenType, _ := claims["type"].(string)
+	if tokenType != "access" {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"status": false, "message": "Invalid token type"})
+	}
+
+	userId, ok := claims["user_id"].(string)
+	if !ok {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"status": false, "message": "Invalid token payload"})
+	}
+
+	user_id, err := uuid.Parse(userId)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"status": false, "message": "Invalid user id"})
+	}
+
+	user, err := repo.GetUserByID(user_id)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(fiber.Map{"status": false, "message": "User not found"})
+	}
+
+	if user.Status != "active" {
+		return c.Status(fiber.StatusForbidden).JSON(fiber.Map{"status": false, "message": "User is inactive"})
+	}
+
+	c.Locals("user", user)
+	return c.Next()
 }
 
 func jwtSuccess(c *fiber.Ctx) error {
@@ -51,4 +90,12 @@ func jwtSuccess(c *fiber.Ctx) error {
 	}
 	c.Locals("user", user)
 	return c.Next()
+}
+
+func jwtSecret() string {
+	key := strings.TrimSpace(app.Config("SECRETKEY"))
+	if key == "" {
+		return "default-secret"
+	}
+	return key
 }

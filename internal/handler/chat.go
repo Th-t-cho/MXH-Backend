@@ -35,7 +35,7 @@ type messageListResponse struct {
 // @Success 200 {object} conversationResponse
 // @Router /api/conversations/direct.json [post]
 func CreateDirectConversation(c *fiber.Ctx) error {
-	user, err := currentUserFromRequest(c)
+	user, err := currentUserFromContext(c)
 	if err != nil {
 		return c.Status(fiber.StatusUnauthorized).JSON(errorResponse("Unauthorized"))
 	}
@@ -67,7 +67,7 @@ func CreateDirectConversation(c *fiber.Ctx) error {
 // @Success 200 {object} conversationResponse
 // @Router /api/conversations.json [get]
 func ListConversations(c *fiber.Ctx) error {
-	user, err := currentUserFromRequest(c)
+	user, err := currentUserFromContext(c)
 	if err != nil {
 		return c.Status(fiber.StatusUnauthorized).JSON(errorResponse("Unauthorized"))
 	}
@@ -91,7 +91,7 @@ func ListConversations(c *fiber.Ctx) error {
 // @Success 200 {object} messageListResponse
 // @Router /api/conversations/{id}/messages.json [get]
 func ListMessages(c *fiber.Ctx) error {
-	user, err := currentUserFromRequest(c)
+	user, err := currentUserFromContext(c)
 	if err != nil {
 		return c.Status(fiber.StatusUnauthorized).JSON(errorResponse("Unauthorized"))
 	}
