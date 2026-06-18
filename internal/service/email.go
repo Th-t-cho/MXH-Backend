@@ -39,17 +39,39 @@ func sendOTPEmail(email string, otp string, expiresIn time.Duration, logLabel st
 		provider = "console"
 	}
 
+	maskedEmail := maskEmail(email)
+	logrus.WithFields(logrus.Fields{
+		"provider": provider,
+		"email":    maskedEmail,
+		"subject":  subject,
+	}).Info("Sending OTP email")
+
+	var err error
 	switch provider {
 	case "console":
-		logrus.Infof("%s for %s: %s (expires in %s)", logLabel, email, otp, expiresIn.String())
+		logrus.Infof("%s for %s: %s (expires in %s)", logLabel, maskedEmail, otp, expiresIn.String())
 		return nil
 	case "resend":
-		return sendOTPWithResend(email, otp, expiresIn, subject)
+		err = sendOTPWithResend(email, otp, expiresIn, subject)
 	case "smtp":
-		return sendOTPWithSMTP(email, otp, expiresIn, subject)
+		err = sendOTPWithSMTP(email, otp, expiresIn, subject)
 	default:
-		return fmt.Errorf("unsupported EMAIL_PROVIDER: %s", provider)
+		err = fmt.Errorf("unsupported EMAIL_PROVIDER: %s", provider)
 	}
+	if err != nil {
+		logrus.WithFields(logrus.Fields{
+			"provider": provider,
+			"email":    maskedEmail,
+			"error":    err.Error(),
+		}).Error("Failed to send OTP email")
+		return err
+	}
+
+	logrus.WithFields(logrus.Fields{
+		"provider": provider,
+		"email":    maskedEmail,
+	}).Info("OTP email sent")
+	return nil
 }
 
 func sendOTPWithResend(email string, otp string, expiresIn time.Duration, subject string) error {
@@ -121,6 +143,14 @@ func sendOTPWithSMTP(email string, otp string, expiresIn time.Duration, subject 
 	if from == "" {
 		from = username
 	}
+	logrus.WithFields(logrus.Fields{
+		"host":          host,
+		"port":          port,
+		"username_set":  username != "",
+		"password_set":  password != "",
+		"mail_from_set": from != "",
+		"timeout":       smtpTimeout().String(),
+	}).Info("SMTP config loaded")
 
 	fromAddress := from
 	parsedFrom, err := mail.ParseAddress(from)
@@ -229,4 +259,19 @@ func smtpTimeout() time.Duration {
 		seconds = 10
 	}
 	return time.Duration(seconds) * time.Second
+}
+
+func maskEmail(email string) string {
+	email = strings.TrimSpace(email)
+	parts := strings.Split(email, "@")
+	if len(parts) != 2 {
+		return "***"
+	}
+
+	name := parts[0]
+	domain := parts[1]
+	if len(name) <= 2 {
+		return "***@" + domain
+	}
+	return name[:2] + "***@" + domain
 }
