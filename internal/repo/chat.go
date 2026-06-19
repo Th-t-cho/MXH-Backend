@@ -14,6 +14,8 @@ import (
 
 var ErrConversationForbidden = errors.New("conversation forbidden")
 var ErrInvalidConversationMember = errors.New("invalid conversation member")
+var ErrMessageForbidden = errors.New("message forbidden")
+var ErrMessageNotFound = errors.New("message not found")
 
 func GetOrCreateDirectConversation(userID uuid.UUID, otherUserID uuid.UUID) (model.Conversation, error) {
 	if userID == uuid.Nil || otherUserID == uuid.Nil || userID == otherUserID {
@@ -166,4 +168,60 @@ func MarkConversationRead(conversationID uuid.UUID, userID uuid.UUID) error {
 	return app.Database.DB.Model(&model.ConversationMember{}).
 		Where("conversation_id = ? AND user_id = ?", conversationID, userID).
 		Update("last_read_at", clause.Expr{SQL: "NOW()"}).Error
+}
+
+func UpdateMessage(messageID uuid.UUID, senderID uuid.UUID, content string) (model.Message, error) {
+	content = strings.TrimSpace(content)
+	if content == "" {
+		return model.Message{}, gorm.ErrInvalidData
+	}
+
+	message := model.Message{}
+	if err := app.Database.DB.First(&message, "id = ?", messageID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return model.Message{}, ErrMessageNotFound
+		}
+		return model.Message{}, err
+	}
+
+	if message.SenderID != senderID {
+		return model.Message{}, ErrMessageForbidden
+	}
+
+	if err := app.Database.DB.Model(&message).Update("content", content).Error; err != nil {
+		return model.Message{}, err
+	}
+
+	return GetMessageByID(messageID)
+}
+
+func DeleteMessage(messageID uuid.UUID, senderID uuid.UUID) (uuid.UUID, error) {
+	message := model.Message{}
+	if err := app.Database.DB.First(&message, "id = ?", messageID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return uuid.Nil, ErrMessageNotFound
+		}
+		return uuid.Nil, err
+	}
+
+	if message.SenderID != senderID {
+		return uuid.Nil, ErrMessageForbidden
+	}
+
+	convID := message.ConversationID
+	return convID, app.Database.DB.Delete(&message).Error
+}
+
+func DeleteConversation(conversationID uuid.UUID, userID uuid.UUID) error {
+	ok, err := IsConversationMember(conversationID, userID)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return ErrConversationForbidden
+	}
+
+	return app.Database.DB.
+		Where("conversation_id = ? AND user_id = ?", conversationID, userID).
+		Delete(&model.ConversationMember{}).Error
 }

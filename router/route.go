@@ -62,7 +62,10 @@ func setupRouter(fiber_app *fiber.App) {
 	chat := api.Group("", middleware.UserAuth)
 	chat.Post("/conversations/direct.json", handler.CreateDirectConversation)
 	chat.Get("/conversations.json", handler.ListConversations)
+	chat.Delete("/conversations/:id.json", handler.DeleteConversation)
 	chat.Get("/conversations/:id/messages.json", handler.ListMessages)
+	chat.Patch("/conversations/:id/messages/:msgId.json", handler.UpdateMessage)
+	chat.Delete("/conversations/:id/messages/:msgId.json", handler.DeleteMessage)
 
 	media := api.Group("/media", middleware.UserAuth)
 	media.Post("/upload.json", handler.UploadMedia)

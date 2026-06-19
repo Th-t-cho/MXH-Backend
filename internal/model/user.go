@@ -12,8 +12,9 @@ type User struct {
 	Role     string `json:"role,omitempty"`
 	Avatar   string `json:"avatar,omitempty"`
 	Title    string `json:"title,omitempty"`
-	Status   string `json:"status,omitempty" gorm:"default:'active'"`
-	IsVerify bool   `json:"is_verify,omitempty" gorm:"default:false"`
+	Status     string     `json:"status,omitempty" gorm:"default:'active'"`
+	IsVerify   bool       `json:"is_verify,omitempty" gorm:"default:false"`
+	LastSeenAt *time.Time `json:"last_seen_at,omitempty" gorm:"index"`
 }
 
 type UserOTP struct {

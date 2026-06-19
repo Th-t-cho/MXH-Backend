@@ -116,6 +116,13 @@ func UpdateUserPassword(userID uuid.UUID, password string) error {
 		Update("password", password).Error
 }
 
+func UpdateUserLastSeen(userID uuid.UUID) error {
+	now := time.Now()
+	return app.Database.DB.Model(&model.User{}).
+		Where("id = ?", userID).
+		Update("last_seen_at", now).Error
+}
+
 func SearchUsers(query string, excludeID uuid.UUID, limit int) ([]model.User, error) {
 	if limit <= 0 {
 		limit = 20

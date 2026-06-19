@@ -81,6 +81,22 @@ func (hub *chatHubState) sendToUsers(userIDs []uuid.UUID, event chatWSEvent) {
 	}
 }
 
+func (hub *chatHubState) getOnlineUserIDs() []uuid.UUID {
+	hub.mu.RLock()
+	defer hub.mu.RUnlock()
+	ids := make([]uuid.UUID, 0, len(hub.clients))
+	for id := range hub.clients {
+		ids = append(ids, id)
+	}
+	return ids
+}
+
+func (hub *chatHubState) isOnline(userID uuid.UUID) bool {
+	hub.mu.RLock()
+	defer hub.mu.RUnlock()
+	return len(hub.clients[userID]) > 0
+}
+
 // ChatWebSocket handles realtime chat events.
 func ChatWebSocket(c *websocket.Conn) {
 	user, err := currentUserFromToken(websocketToken(c))
@@ -96,17 +112,59 @@ func ChatWebSocket(c *websocket.Conn) {
 		send:   make(chan chatWSEvent, 32),
 	}
 	chatHub.register(client)
-	defer chatHub.unregister(client)
 
 	go chatWritePump(client)
 	client.send <- chatWSEvent{
 		Type:    "connected",
 		Message: "WebSocket connected",
 		Data: map[string]interface{}{
-			"user_id": user.ID,
+			"user_id":      user.ID,
+			"online_users": chatHub.getOnlineUserIDs(),
 		},
 	}
+
+	// Broadcast online status to conversation partners
+	go broadcastPresence(user.ID, "user_online")
+
 	chatReadPump(client, user)
+
+	// Client disconnected — persist last seen then broadcast
+	chatHub.unregister(client)
+	if !chatHub.isOnline(user.ID) {
+		_ = repo.UpdateUserLastSeen(user.ID)
+		go broadcastPresence(user.ID, "user_offline")
+	}
+}
+
+func broadcastPresence(userID uuid.UUID, eventType string) {
+	conversations, err := repo.ListConversations(userID)
+	if err != nil {
+		return
+	}
+
+	eventData := map[string]interface{}{"user_id": userID}
+	if eventType == "user_offline" {
+		eventData["last_seen_at"] = time.Now()
+	}
+
+	notified := map[uuid.UUID]bool{}
+	for _, conv := range conversations {
+		memberIDs, err := repo.GetConversationMemberIDs(conv.ID)
+		if err != nil {
+			continue
+		}
+		filtered := make([]uuid.UUID, 0, len(memberIDs))
+		for _, id := range memberIDs {
+			if !notified[id] {
+				notified[id] = true
+				filtered = append(filtered, id)
+			}
+		}
+		chatHub.sendToUsers(filtered, chatWSEvent{
+			Type: eventType,
+			Data: eventData,
+		})
+	}
 }
 
 func websocketToken(c *websocket.Conn) string {
