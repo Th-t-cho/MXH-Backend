@@ -115,3 +115,16 @@ func UpdateUserPassword(userID uuid.UUID, password string) error {
 		Where("id = ?", userID).
 		Update("password", password).Error
 }
+
+func SearchUsers(query string, excludeID uuid.UUID, limit int) ([]model.User, error) {
+	if limit <= 0 {
+		limit = 20
+	}
+	q := "%" + strings.ToLower(strings.TrimSpace(query)) + "%"
+	var users []model.User
+	err := app.Database.DB.
+		Where("id != ? AND status = 'active' AND (LOWER(name) LIKE ? OR LOWER(username) LIKE ?)", excludeID, q, q).
+		Limit(limit).
+		Find(&users).Error
+	return users, err
+}

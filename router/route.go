@@ -56,6 +56,9 @@ func setupRouter(fiber_app *fiber.App) {
 	api.Post("/auth/forgot-password/otp/verify.json", handler.VerifyForgotPasswordOTP)
 	api.Post("/auth/forgot-password/reset.json", handler.ResetPassword)
 
+	users := api.Group("/users", middleware.UserAuth)
+	users.Get("/search.json", handler.SearchUsers)
+
 	chat := api.Group("", middleware.UserAuth)
 	chat.Post("/conversations/direct.json", handler.CreateDirectConversation)
 	chat.Get("/conversations.json", handler.ListConversations)

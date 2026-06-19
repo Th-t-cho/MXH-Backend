@@ -393,3 +393,30 @@ func ResetPassword(c *fiber.Ctx) error {
 
 	return c.JSON(successResponse("Password reset successfully"))
 }
+
+// SearchUsers searches active users by name or username.
+// @Summary Search users
+// @Tags Users
+// @Produce json
+// @Param Authorization header string true "Bearer access token"
+// @Param q query string true "Search query (name or username)"
+// @Success 200 {object} map[string]interface{}
+// @Router /api/users/search.json [get]
+func SearchUsers(c *fiber.Ctx) error {
+	user, err := currentUserFromContext(c)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(errorResponse("Unauthorized"))
+	}
+
+	q := strings.TrimSpace(c.Query("q"))
+	if q == "" {
+		return c.JSON(successResponse("Users found", fiber.Map{"data": []interface{}{}}))
+	}
+
+	users, err := repo.SearchUsers(q, user.ID, 20)
+	if err != nil {
+		return c.JSON(errorResponse("Failed to search users"))
+	}
+
+	return c.JSON(successResponse("Users found", fiber.Map{"data": users}))
+}
