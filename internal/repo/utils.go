@@ -30,4 +30,7 @@ func (query *Query) Parse(c *fiber.Ctx) {
 	if query.Limit <= 0 {
 		query.Limit = 10
 	}
+	if query.Limit > 100 {
+		query.Limit = 100
+	}
 }

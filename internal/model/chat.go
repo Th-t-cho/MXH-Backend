@@ -1,9 +1,8 @@
 package model
 
 import (
-	"time"
-
 	"github.com/google/uuid"
+	"time"
 )
 
 type Conversation struct {
@@ -15,8 +14,8 @@ type Conversation struct {
 
 type ConversationMember struct {
 	Model          `gorm:"embedded"`
-	ConversationID uuid.UUID  `json:"conversation_id,omitempty" gorm:"index;not null"`
-	UserID         uuid.UUID  `json:"user_id,omitempty" gorm:"index;not null"`
+	ConversationID uuid.UUID  `json:"conversation_id,omitempty" gorm:"index:idx_cm_conv_user,priority:1;not null"`
+	UserID         uuid.UUID  `json:"user_id,omitempty" gorm:"index:idx_cm_conv_user,priority:2;index;not null"`
 	User           User       `json:"user,omitempty" gorm:"foreignKey:UserID"`
 	LastReadAt     *time.Time `json:"last_read_at,omitempty"`
 }

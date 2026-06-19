@@ -109,5 +109,16 @@ func (dbConf *DatabaseConfig) Setup() {
 		}
 	}
 
+	// Composite indexes for hot query paths — IF NOT EXISTS prevents duplicate errors on restart
+	rawIndexes := []string{
+		// ListMessages: WHERE conversation_id = ? ORDER BY created_at DESC
+		`CREATE INDEX IF NOT EXISTS idx_messages_conv_created ON messages (conversation_id, created_at DESC)`,
+	}
+	for _, sql := range rawIndexes {
+		if err := db.Exec(sql).Error; err != nil {
+			logrus.Warn("Index creation warning:", err)
+		}
+	}
+
 	logrus.Info("Database connection established & migration completed")
 }
