@@ -12,10 +12,11 @@ import (
 )
 
 type chatWSRequest struct {
-	Type           string    `json:"type"`
-	ConversationID uuid.UUID `json:"conversation_id"`
-	ReceiverID     uuid.UUID `json:"receiver_id"`
-	Content        string    `json:"content"`
+	Type           string      `json:"type"`
+	ConversationID uuid.UUID   `json:"conversation_id"`
+	ReceiverID     uuid.UUID   `json:"receiver_id"`
+	Content        string      `json:"content"`
+	Signal         interface{} `json:"signal,omitempty"` // WebRTC SDP / ICE payload
 }
 
 type chatWSEvent struct {
@@ -203,10 +204,12 @@ func chatReadPump(client *chatClient, user model.User) {
 			handleChatBroadcast(client, user, req.ConversationID, "typing")
 		case "seen":
 			handleChatSeen(client, user, req.ConversationID)
+		case "call_offer", "call_answer", "call_ice", "call_end", "call_reject":
+			handleCallSignal(client, user, req, eventType)
 		case "":
 			client.send <- chatWSEvent{Type: "error", Message: "type is required"}
 		default:
-			client.send <- chatWSEvent{Type: "error", Message: "Unsupported event type. Allowed: send_message, typing, seen"}
+			client.send <- chatWSEvent{Type: "error", Message: "Unsupported type"}
 		}
 	}
 }
@@ -269,6 +272,20 @@ func handleChatBroadcast(client *chatClient, user model.User, conversationID uui
 		Data: map[string]interface{}{
 			"user_id": user.ID,
 			"time":    time.Now(),
+		},
+	})
+}
+
+func handleCallSignal(client *chatClient, user model.User, req chatWSRequest, eventType string) {
+	if req.ReceiverID == uuid.Nil {
+		client.send <- chatWSEvent{Type: "error", Message: "receiver_id required for call signals"}
+		return
+	}
+	chatHub.sendToUsers([]uuid.UUID{req.ReceiverID}, chatWSEvent{
+		Type: eventType, // use pre-normalized type from switch
+		Data: map[string]interface{}{
+			"caller_id": user.ID,
+			"signal":    req.Signal,
 		},
 	})
 }
