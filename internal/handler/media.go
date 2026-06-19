@@ -1,9 +1,9 @@
 package handler
 
 import (
-	"bytes"
 	"core/app"
 	"core/internal/service"
+	"fmt"
 	"io"
 	"net/http"
 	"path/filepath"
@@ -21,7 +21,7 @@ type uploadMediaResponse struct {
 	Data    service.UploadedMedia `json:"data"`
 }
 
-// UploadMedia uploads an image or video file to Cloudflare R2.
+// UploadMedia uploads an image or video file to S3-compatible storage.
 // @Summary Upload media
 // @Tags Media
 // @Accept multipart/form-data
@@ -64,10 +64,15 @@ func UploadMedia(c *fiber.Ctx) error {
 		return c.JSON(errorResponse("Only image or video files are allowed"))
 	}
 
-	reader := io.MultiReader(bytes.NewReader(head[:n]), file)
+	if _, err := file.Seek(0, io.SeekStart); err != nil {
+		return c.JSON(errorResponse("Failed to read file"))
+	}
+
 	key := mediaStorageKey(user.ID.String(), mimeType, fileHeader.Filename)
-	media, err := service.UploadMediaToR2(c.Context(), key, reader, fileHeader.Size, mimeType)
+	media, err := service.UploadMediaToStorage(c.Context(), key, file, fileHeader.Size, mimeType)
 	if err != nil {
+		fmt.Println("🚀 ~ file: media.go ~ line 71 ~ funcUploadMedia ~ err : ", err)
+
 		return c.JSON(errorResponse("Failed to upload media"))
 	}
 

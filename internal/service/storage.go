@@ -4,7 +4,6 @@ import (
 	"context"
 	"core/app"
 	"errors"
-	"fmt"
 	"io"
 	"mime"
 	"path"
@@ -23,26 +22,22 @@ type UploadedMedia struct {
 	Size     int64  `json:"size"`
 }
 
-func UploadMediaToR2(ctx context.Context, key string, body io.Reader, size int64, mimeType string) (UploadedMedia, error) {
-	accountID := strings.TrimSpace(app.Config("R2_ACCOUNT_ID"))
-	accessKeyID := strings.TrimSpace(app.Config("R2_ACCESS_KEY_ID"))
-	secretAccessKey := strings.TrimSpace(app.Config("R2_SECRET_ACCESS_KEY"))
-	bucket := strings.TrimSpace(app.Config("R2_BUCKET"))
-	if accountID == "" || accessKeyID == "" || secretAccessKey == "" || bucket == "" {
-		return UploadedMedia{}, errors.New("R2 config is incomplete")
+func UploadMediaToStorage(ctx context.Context, key string, body io.Reader, size int64, mimeType string) (UploadedMedia, error) {
+	storage, err := r2StorageConfig()
+	if err != nil {
+		return UploadedMedia{}, err
 	}
 
-	endpoint := fmt.Sprintf("https://%s.r2.cloudflarestorage.com", accountID)
 	cfg, err := config.LoadDefaultConfig(ctx,
 		config.WithRegion("auto"),
-		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(accessKeyID, secretAccessKey, "")),
+		config.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(storage.accessKeyID, storage.secretAccessKey, "")),
 	)
 	if err != nil {
 		return UploadedMedia{}, err
 	}
 
 	client := s3.NewFromConfig(cfg, func(options *s3.Options) {
-		options.BaseEndpoint = aws.String(endpoint)
+		options.BaseEndpoint = aws.String(storage.endpoint())
 		options.UsePathStyle = true
 	})
 
@@ -52,7 +47,7 @@ func UploadMediaToR2(ctx context.Context, key string, body io.Reader, size int64
 	}
 
 	_, err = client.PutObject(ctx, &s3.PutObjectInput{
-		Bucket:        aws.String(bucket),
+		Bucket:        aws.String(storage.bucket),
 		Key:           aws.String(key),
 		Body:          body,
 		ContentLength: aws.Int64(size),
@@ -64,16 +59,46 @@ func UploadMediaToR2(ctx context.Context, key string, body io.Reader, size int64
 
 	return UploadedMedia{
 		Key:      key,
-		URL:      mediaPublicURL(key),
+		URL:      storage.publicURL(key),
 		MimeType: mimeType,
 		Size:     size,
 	}, nil
 }
 
-func mediaPublicURL(key string) string {
-	baseURL := strings.TrimRight(strings.TrimSpace(app.Config("R2_PUBLIC_BASE_URL")), "/")
+type storageConfig struct {
+	accessKeyID     string
+	secretAccessKey string
+	bucket          string
+	accountID       string
+	publicBaseURL   string
+}
+
+func r2StorageConfig() (storageConfig, error) {
+	cfg := storageConfig{
+		accountID:       strings.TrimSpace(app.Config("R2_ACCOUNT_ID")),
+		accessKeyID:     strings.TrimSpace(app.Config("R2_ACCESS_KEY_ID")),
+		secretAccessKey: strings.TrimSpace(app.Config("R2_SECRET_ACCESS_KEY")),
+		bucket:          strings.TrimSpace(app.Config("R2_BUCKET")),
+		publicBaseURL:   strings.TrimSpace(app.Config("R2_PUBLIC_BASE_URL")),
+	}
+	if !cfg.isComplete() {
+		return storageConfig{}, errors.New("R2 config is incomplete")
+	}
+	return cfg, nil
+}
+
+func (cfg storageConfig) isComplete() bool {
+	return cfg.accountID != "" && cfg.accessKeyID != "" && cfg.secretAccessKey != "" && cfg.bucket != ""
+}
+
+func (cfg storageConfig) endpoint() string {
+	return "https://" + cfg.accountID + ".r2.cloudflarestorage.com"
+}
+
+func (cfg storageConfig) publicURL(key string) string {
+	baseURL := strings.TrimRight(cfg.publicBaseURL, "/")
 	if baseURL == "" {
-		return ""
+		baseURL = strings.TrimRight(cfg.endpoint(), "/") + "/" + strings.TrimLeft(cfg.bucket, "/")
 	}
 	return baseURL + "/" + strings.TrimLeft(key, "/")
 }
