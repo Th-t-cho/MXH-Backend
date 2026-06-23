@@ -281,6 +281,14 @@ func handleCallSignal(client *chatClient, user model.User, req chatWSRequest, ev
 		client.send <- chatWSEvent{Type: "error", Message: "receiver_id required for call signals"}
 		return
 	}
+	// Khi gửi offer mà receiver không online → báo lại ngay cho caller
+	if eventType == "call_offer" && !chatHub.isOnline(req.ReceiverID) {
+		client.send <- chatWSEvent{
+			Type: "call_unavailable",
+			Data: map[string]interface{}{"receiver_id": req.ReceiverID},
+		}
+		return
+	}
 	chatHub.sendToUsers([]uuid.UUID{req.ReceiverID}, chatWSEvent{
 		Type: eventType, // use pre-normalized type from switch
 		Data: map[string]interface{}{
