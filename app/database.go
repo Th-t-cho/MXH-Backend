@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/sirupsen/logrus"
@@ -101,6 +102,11 @@ func (dbConf *DatabaseConfig) Setup() {
 		&model.Conversation{},
 		&model.ConversationMember{},
 		&model.Message{},
+		&model.Post{},
+		&model.PostTag{},
+		&model.PostReaction{},
+		&model.PostComment{},
+		&model.PostCommentReaction{},
 	}
 
 	for _, m := range models {
@@ -109,14 +115,16 @@ func (dbConf *DatabaseConfig) Setup() {
 		}
 	}
 
-	// Composite indexes for hot query paths — IF NOT EXISTS prevents duplicate errors on restart
+	// Composite indexes for hot query paths — ignore "Duplicate key name" on restart
 	rawIndexes := []string{
-		// ListMessages: WHERE conversation_id = ? ORDER BY created_at DESC
-		`CREATE INDEX IF NOT EXISTS idx_messages_conv_created ON messages (conversation_id, created_at DESC)`,
+		`CREATE INDEX idx_messages_conv_created ON messages (conversation_id, created_at DESC)`,
 	}
 	for _, sql := range rawIndexes {
 		if err := db.Exec(sql).Error; err != nil {
-			logrus.Warn("Index creation warning:", err)
+			msg := err.Error()
+			if !strings.Contains(msg, "Duplicate key name") && !strings.Contains(msg, "1061") {
+				logrus.Warn("Index creation warning:", err)
+			}
 		}
 	}
 

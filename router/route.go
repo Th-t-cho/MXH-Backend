@@ -69,6 +69,18 @@ func setupRouter(fiber_app *fiber.App) {
 
 	media := api.Group("/media", middleware.UserAuth)
 	media.Post("/upload.json", handler.UploadMedia)
+
+	posts := api.Group("", middleware.UserAuth)
+	posts.Post("/posts.json", handler.CreatePost)
+	posts.Get("/posts.json", handler.ListPosts)
+	posts.Get("/posts/:id.json", handler.GetPost)
+	posts.Delete("/posts/:id.json", handler.DeletePost)
+	posts.Post("/posts/:id/react.json", handler.ReactPost)
+	posts.Post("/posts/:id/share.json", handler.SharePost)
+	posts.Post("/posts/:id/comments.json", handler.AddComment)
+	posts.Get("/posts/:id/comments.json", handler.ListComments)
+	posts.Delete("/posts/:id/comments/:cid.json", handler.DeleteComment)
+	posts.Post("/posts/:id/comments/:cid/react.json", handler.ReactComment)
 }
 
 func uploadBodyLimit() int {
