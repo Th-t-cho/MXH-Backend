@@ -63,6 +63,7 @@ func setupRouter(fiber_app *fiber.App) {
 	chat.Post("/conversations/direct.json", handler.CreateDirectConversation)
 	chat.Get("/conversations.json", handler.ListConversations)
 	chat.Delete("/conversations/:id.json", handler.DeleteConversation)
+	chat.Delete("/conversations/:id/purge.json", handler.PurgeConversation)
 	chat.Get("/conversations/:id/messages.json", handler.ListMessages)
 	chat.Patch("/conversations/:id/messages/:msgId.json", handler.UpdateMessage)
 	chat.Delete("/conversations/:id/messages/:msgId.json", handler.DeleteMessage)

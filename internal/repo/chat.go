@@ -67,7 +67,7 @@ func findDirectConversation(userID uuid.UUID, otherUserID uuid.UUID) (model.Conv
 func ListConversations(userID uuid.UUID) ([]model.Conversation, error) {
 	conversations := []model.Conversation{}
 	err := app.Database.DB.
-		Joins("JOIN conversation_members cm ON cm.conversation_id = conversations.id AND cm.user_id = ?", userID).
+		Joins("JOIN conversation_members cm ON cm.conversation_id = conversations.id AND cm.user_id = ? AND cm.deleted_at IS NULL", userID).
 		Preload("Members.User").
 		Where("conversations.last_message_at IS NOT NULL").
 		Order("conversations.last_message_at DESC").
@@ -285,5 +285,29 @@ func DeleteConversation(conversationID uuid.UUID, userID uuid.UUID) error {
 		}
 
 		return nil
+	})
+}
+
+func PurgeConversation(conversationID uuid.UUID, userID uuid.UUID) error {
+	ok, err := IsConversationMember(conversationID, userID)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return ErrConversationForbidden
+	}
+
+	return app.Database.DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Unscoped().
+			Where("conversation_id = ?", conversationID).
+			Delete(&model.Message{}).Error; err != nil {
+			return err
+		}
+		if err := tx.Unscoped().
+			Where("conversation_id = ?", conversationID).
+			Delete(&model.ConversationMember{}).Error; err != nil {
+			return err
+		}
+		return tx.Unscoped().Delete(&model.Conversation{}, "id = ?", conversationID).Error
 	})
 }

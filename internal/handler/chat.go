@@ -222,6 +222,49 @@ func DeleteConversation(c *fiber.Ctx) error {
 	return c.JSON(successResponse("Conversation deleted", nil))
 }
 
+// PurgeConversation permanently deletes a conversation, its messages and its
+// memberships for every participant. This cannot be undone.
+// @Summary Permanently delete a conversation
+// @Tags Chat
+// @Produce json
+// @Param Authorization header string true "Bearer access token"
+// @Param id path string true "Conversation ID"
+// @Success 200 {object} conversationResponse
+// @Router /api/conversations/{id}/purge.json [delete]
+func PurgeConversation(c *fiber.Ctx) error {
+	user, err := currentUserFromContext(c)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(errorResponse("Unauthorized"))
+	}
+
+	conversationID, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return c.JSON(errorResponse("Invalid conversation id"))
+	}
+
+	// Member IDs must be fetched before purging — nothing to query afterwards.
+	memberIDs, _ := repo.GetConversationMemberIDs(conversationID)
+
+	if err := repo.PurgeConversation(conversationID, user.ID); err != nil {
+		if errors.Is(err, repo.ErrConversationForbidden) {
+			return c.Status(fiber.StatusForbidden).JSON(errorResponse("Access denied"))
+		}
+		return c.JSON(errorResponse("Failed to delete conversation"))
+	}
+
+	go func() {
+		chatHub.sendToUsers(memberIDs, chatWSEvent{
+			Type:           "conversation_deleted",
+			ConversationID: conversationID,
+			Data: map[string]interface{}{
+				"conversation_id": conversationID,
+			},
+		})
+	}()
+
+	return c.JSON(successResponse("Conversation deleted", nil))
+}
+
 // ListMessages returns messages in a conversation.
 // @Summary List conversation messages
 // @Tags Chat
