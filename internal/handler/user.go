@@ -222,7 +222,16 @@ func Register(c *fiber.Ctx) error {
 		return c.JSON(errorResponse("Failed to create user"))
 	}
 
-	return c.JSON(successResponse("User created", fiber.Map{"data": user}))
+	accessToken, refreshToken, err := generateAuthTokens(user)
+	if err != nil {
+		return c.JSON(errorResponse("Failed to create tokens"))
+	}
+
+	return c.JSON(successResponse("User created", fiber.Map{
+		"data":          user,
+		"access_token":  accessToken,
+		"refresh_token": refreshToken,
+	}))
 }
 
 // Login authenticates a user and returns access and refresh tokens.

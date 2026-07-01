@@ -221,7 +221,25 @@ func DeleteConversation(conversationID uuid.UUID, userID uuid.UUID) error {
 		return ErrConversationForbidden
 	}
 
-	return app.Database.DB.
-		Where("conversation_id = ? AND user_id = ?", conversationID, userID).
-		Delete(&model.ConversationMember{}).Error
+	return app.Database.DB.Transaction(func(tx *gorm.DB) error {
+		if err := tx.
+			Where("conversation_id = ? AND user_id = ?", conversationID, userID).
+			Delete(&model.ConversationMember{}).Error; err != nil {
+			return err
+		}
+
+		var remaining int64
+		if err := tx.Model(&model.ConversationMember{}).
+			Where("conversation_id = ?", conversationID).
+			Count(&remaining).Error; err != nil {
+			return err
+		}
+		if remaining == 0 {
+			if err := tx.Delete(&model.Conversation{}, "id = ?", conversationID).Error; err != nil {
+				return err
+			}
+		}
+
+		return nil
+	})
 }
