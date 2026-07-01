@@ -27,7 +27,13 @@ func GetOrCreateDirectConversation(userID uuid.UUID, otherUserID uuid.UUID) (mod
 	}
 
 	if conversation, err := findDirectConversation(userID, otherUserID); err == nil {
-		return conversation, nil
+		if err := app.Database.DB.Unscoped().
+			Model(&model.ConversationMember{}).
+			Where("conversation_id = ? AND user_id = ?", conversation.ID, userID).
+			Update("deleted_at", nil).Error; err != nil {
+			return model.Conversation{}, err
+		}
+		return GetConversationForUser(conversation.ID, userID)
 	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 		return model.Conversation{}, err
 	}
@@ -63,9 +69,28 @@ func ListConversations(userID uuid.UUID) ([]model.Conversation, error) {
 	err := app.Database.DB.
 		Joins("JOIN conversation_members cm ON cm.conversation_id = conversations.id AND cm.user_id = ?", userID).
 		Preload("Members.User").
-		Order("COALESCE(conversations.last_message_at, conversations.created_at) DESC").
+		Where("conversations.last_message_at IS NOT NULL").
+		Order("conversations.last_message_at DESC").
 		Find(&conversations).Error
-	return conversations, err
+	if err != nil {
+		return nil, err
+	}
+
+	for i := range conversations {
+		message := model.Message{}
+		err := app.Database.DB.
+			Preload("Sender").
+			Where("conversation_id = ?", conversations[i].ID).
+			Order("created_at DESC").
+			First(&message).Error
+		if err == nil {
+			conversations[i].LastMessage = &message
+		} else if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, err
+		}
+	}
+
+	return conversations, nil
 }
 
 func GetConversationForUser(conversationID uuid.UUID, userID uuid.UUID) (model.Conversation, error) {
@@ -155,13 +180,26 @@ func ListMessages(conversationID uuid.UUID, userID uuid.UUID, query Query) ([]mo
 	messages := []model.Message{}
 	offset := (query.Page - 1) * query.Limit
 	err := app.Database.DB.
+		Unscoped().
 		Preload("Sender").
 		Where("conversation_id = ?", conversationID).
 		Order("created_at DESC").
 		Limit(query.Limit).
 		Offset(offset).
 		Find(&messages).Error
-	return messages, err
+	if err != nil {
+		return nil, err
+	}
+
+	// Deleted messages are kept (soft delete) so the thread still shows a
+	// placeholder for them, but their real content must not be sent to clients.
+	for i := range messages {
+		if messages[i].DeletedAt != nil && messages[i].DeletedAt.Valid {
+			messages[i].Content = ""
+		}
+	}
+
+	return messages, nil
 }
 
 func MarkConversationRead(conversationID uuid.UUID, userID uuid.UUID) error {
@@ -197,7 +235,7 @@ func UpdateMessage(messageID uuid.UUID, senderID uuid.UUID, content string) (mod
 
 func DeleteMessage(messageID uuid.UUID, senderID uuid.UUID) (uuid.UUID, error) {
 	message := model.Message{}
-	if err := app.Database.DB.First(&message, "id = ?", messageID).Error; err != nil {
+	if err := app.Database.DB.Unscoped().First(&message, "id = ?", messageID).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return uuid.Nil, ErrMessageNotFound
 		}
@@ -209,6 +247,12 @@ func DeleteMessage(messageID uuid.UUID, senderID uuid.UUID) (uuid.UUID, error) {
 	}
 
 	convID := message.ConversationID
+	if message.DeletedAt != nil && message.DeletedAt.Valid {
+		// Already deleted — treat as a no-op so a duplicate/late request
+		// (double-tap, retry) doesn't surface as a 404 error.
+		return convID, nil
+	}
+
 	return convID, app.Database.DB.Delete(&message).Error
 }
 

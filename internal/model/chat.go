@@ -10,6 +10,7 @@ type Conversation struct {
 	Type          string               `json:"type,omitempty" gorm:"index;size:32;default:'direct'"`
 	LastMessageAt *time.Time           `json:"last_message_at,omitempty" gorm:"index"`
 	Members       []ConversationMember `json:"members,omitempty" gorm:"foreignKey:ConversationID"`
+	LastMessage   *Message             `json:"last_message,omitempty" gorm:"-"`
 }
 
 type ConversationMember struct {
@@ -25,6 +26,6 @@ type Message struct {
 	ConversationID uuid.UUID `json:"conversation_id,omitempty" gorm:"index;not null"`
 	SenderID       uuid.UUID `json:"sender_id,omitempty" gorm:"index;not null"`
 	Sender         User      `json:"sender,omitempty" gorm:"foreignKey:SenderID"`
-	Content        string    `json:"content,omitempty" gorm:"type:text;not null"`
+	Content        string    `json:"content" gorm:"type:text;not null"`
 	MessageType    string    `json:"message_type,omitempty" gorm:"size:32;default:'text'"`
 }
