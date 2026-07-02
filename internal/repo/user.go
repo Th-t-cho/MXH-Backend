@@ -116,6 +116,15 @@ func UpdateUserPassword(userID uuid.UUID, password string) error {
 		Update("password", password).Error
 }
 
+func UpdateUserProfile(userID uuid.UUID, fields map[string]interface{}) error {
+	if len(fields) == 0 {
+		return nil
+	}
+	return app.Database.DB.Model(&model.User{}).
+		Where("id = ?", userID).
+		Updates(fields).Error
+}
+
 func UpdateUserLastSeen(userID uuid.UUID) error {
 	now := time.Now()
 	return app.Database.DB.Model(&model.User{}).

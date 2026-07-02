@@ -58,6 +58,9 @@ func setupRouter(fiber_app *fiber.App) {
 
 	users := api.Group("/users", middleware.UserAuth)
 	users.Get("/search.json", handler.SearchUsers)
+	users.Get("/me.json", handler.GetMyProfile)
+	users.Patch("/me.json", handler.UpdateMyProfile)
+	users.Get("/:id.json", handler.GetUserProfile)
 
 	chat := api.Group("", middleware.UserAuth)
 	chat.Post("/conversations/direct.json", handler.CreateDirectConversation)

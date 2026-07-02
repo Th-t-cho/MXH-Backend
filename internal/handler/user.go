@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/gofiber/fiber/v2"
+	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
@@ -24,6 +25,7 @@ type verifyRegisterOTPRequest struct {
 
 type registerRequest struct {
 	Username string `json:"username"`
+	Name     string `json:"name"`
 	Password string `json:"password"`
 	Token    string `json:"token"`
 }
@@ -181,10 +183,17 @@ func Register(c *fiber.Ctx) error {
 	}
 
 	username := strings.TrimSpace(req.Username)
+	name := strings.TrimSpace(req.Name)
 	token := registerTokenFromRequest(c, req.Token)
 
 	if username == "" || len(req.Password) < 6 || token == "" {
 		return c.JSON(errorResponse("Invalid register data"))
+	}
+	if len(name) > 100 {
+		return c.JSON(errorResponse("Name is too long"))
+	}
+	if name == "" {
+		name = username
 	}
 
 	email, err := parseRegisterToken(token)
@@ -212,6 +221,7 @@ func Register(c *fiber.Ctx) error {
 	user := model.User{
 		Email:    email,
 		Username: username,
+		Name:     name,
 		Password: string(hashedPassword),
 		Role:     "User",
 		Status:   "active",
@@ -401,6 +411,147 @@ func ResetPassword(c *fiber.Ctx) error {
 	}
 
 	return c.JSON(successResponse("Password reset successfully"))
+}
+
+type updateProfileRequest struct {
+	Name   *string `json:"name"`
+	Phone  *string `json:"phone"`
+	Title  *string `json:"title"`
+	Avatar *string `json:"avatar"`
+}
+
+type profileResponse struct {
+	Status  bool       `json:"status"`
+	Message string     `json:"message"`
+	Data    model.User `json:"data"`
+}
+
+// GetMyProfile returns the current user's profile.
+// @Summary Get my profile
+// @Tags Users
+// @Produce json
+// @Param Authorization header string true "Bearer access token"
+// @Success 200 {object} profileResponse
+// @Router /api/users/me.json [get]
+func GetMyProfile(c *fiber.Ctx) error {
+	user, err := currentUserFromContext(c)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(errorResponse("Unauthorized"))
+	}
+	return c.JSON(successResponse("Profile", fiber.Map{"data": user}))
+}
+
+// GetUserProfile returns a user's public profile by id.
+// @Summary Get user profile
+// @Tags Users
+// @Produce json
+// @Param Authorization header string true "Bearer access token"
+// @Param id path string true "User ID"
+// @Success 200 {object} profileResponse
+// @Router /api/users/{id}.json [get]
+func GetUserProfile(c *fiber.Ctx) error {
+	if _, err := currentUserFromContext(c); err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(errorResponse("Unauthorized"))
+	}
+
+	userID, err := uuid.Parse(c.Params("id"))
+	if err != nil {
+		return c.JSON(errorResponse("Invalid user id"))
+	}
+
+	user, err := repo.GetUserByID(userID)
+	if errors.Is(err, gorm.ErrRecordNotFound) || (err == nil && user.Status != "active") {
+		return c.JSON(errorResponse("User not found"))
+	}
+	if err != nil {
+		return c.JSON(errorResponse("Failed to get user"))
+	}
+
+	// Public view: hide email of other users; name, phone and title stay visible.
+	user.Email = ""
+	return c.JSON(successResponse("Profile", fiber.Map{"data": user}))
+}
+
+// UpdateMyProfile updates the current user's profile fields.
+// @Summary Update my profile
+// @Tags Users
+// @Accept json
+// @Produce json
+// @Param Authorization header string true "Bearer access token"
+// @Param request body updateProfileRequest true "Profile fields to update"
+// @Success 200 {object} profileResponse
+// @Router /api/users/me.json [patch]
+func UpdateMyProfile(c *fiber.Ctx) error {
+	user, err := currentUserFromContext(c)
+	if err != nil {
+		return c.Status(fiber.StatusUnauthorized).JSON(errorResponse("Unauthorized"))
+	}
+
+	req := updateProfileRequest{}
+	if err := c.BodyParser(&req); err != nil {
+		return c.JSON(errorResponse("Invalid request body"))
+	}
+
+	fields := map[string]interface{}{}
+	if req.Name != nil {
+		name := strings.TrimSpace(*req.Name)
+		if len(name) > 100 {
+			return c.JSON(errorResponse("Name is too long"))
+		}
+		fields["name"] = name
+	}
+	if req.Phone != nil {
+		phone := strings.TrimSpace(*req.Phone)
+		if phone != "" && !isValidPhone(phone) {
+			return c.JSON(errorResponse("Invalid phone number"))
+		}
+		fields["phone"] = phone
+	}
+	if req.Title != nil {
+		title := strings.TrimSpace(*req.Title)
+		if len(title) > 150 {
+			return c.JSON(errorResponse("Title is too long"))
+		}
+		fields["title"] = title
+	}
+	if req.Avatar != nil {
+		avatar := strings.TrimSpace(*req.Avatar)
+		if avatar != "" && !strings.HasPrefix(avatar, "http://") && !strings.HasPrefix(avatar, "https://") {
+			return c.JSON(errorResponse("Invalid avatar URL"))
+		}
+		fields["avatar"] = avatar
+	}
+
+	if len(fields) == 0 {
+		return c.JSON(errorResponse("Nothing to update"))
+	}
+
+	if err := repo.UpdateUserProfile(user.ID, fields); err != nil {
+		return c.JSON(errorResponse("Failed to update profile"))
+	}
+
+	updated, err := repo.GetUserByID(user.ID)
+	if err != nil {
+		return c.JSON(errorResponse("Failed to get updated profile"))
+	}
+
+	return c.JSON(successResponse("Profile updated", fiber.Map{"data": updated}))
+}
+
+func isValidPhone(phone string) bool {
+	if len(phone) < 8 || len(phone) > 15 {
+		return false
+	}
+	for i, r := range phone {
+		if r >= '0' && r <= '9' {
+			continue
+		}
+		if i == 0 && r == '+' {
+			continue
+		}
+		return false
+	}
+	return true
 }
 
 // SearchUsers searches active users by name or username.
