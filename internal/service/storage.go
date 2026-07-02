@@ -103,7 +103,27 @@ func (cfg storageConfig) publicURL(key string) string {
 	return baseURL + "/" + strings.TrimLeft(key, "/")
 }
 
+// knownMimeExtensions maps common media mimetypes to a canonical extension.
+// mime.ExtensionsByType is OS-dependent (it reads /etc/mime.types) and can
+// return an unexpected extension first, e.g. ".jfif" instead of ".jpg" for
+// image/jpeg — so common types are hardcoded here rather than relying on it.
+var knownMimeExtensions = map[string]string{
+	"image/jpeg":      ".jpg",
+	"image/png":       ".png",
+	"image/webp":      ".webp",
+	"image/gif":       ".gif",
+	"image/avif":      ".avif",
+	"image/bmp":       ".bmp",
+	"image/svg+xml":   ".svg",
+	"video/mp4":       ".mp4",
+	"video/webm":      ".webm",
+	"video/quicktime": ".mov",
+}
+
 func ExtensionFromMimeType(mimeType string) string {
+	if ext, ok := knownMimeExtensions[mimeType]; ok {
+		return ext
+	}
 	extensions, err := mime.ExtensionsByType(mimeType)
 	if err != nil || len(extensions) == 0 {
 		return ""

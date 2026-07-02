@@ -8,7 +8,6 @@ import (
 	"image"
 	"image/color"
 	stddraw "image/draw"
-	"image/jpeg"
 	"io"
 	"net/http"
 	"path/filepath"
@@ -16,11 +15,13 @@ import (
 	"strings"
 	"time"
 
+	"github.com/chai2010/webp"
 	"github.com/gofiber/fiber/v2"
 	"github.com/google/uuid"
 	xdraw "golang.org/x/image/draw"
 
 	_ "image/gif"
+	_ "image/jpeg"
 	_ "image/png"
 )
 
@@ -123,7 +124,7 @@ func prepareUploadBody(file io.ReadSeeker, size int64, mimeType string) (io.Read
 		return file, size, mimeType, nil
 	}
 
-	return bytes.NewReader(resized), int64(len(resized)), "image/jpeg", nil
+	return bytes.NewReader(resized), int64(len(resized)), "image/webp", nil
 }
 
 func resizeImage(file io.ReadSeeker) ([]byte, error) {
@@ -150,7 +151,7 @@ func resizeImage(file io.ReadSeeker) ([]byte, error) {
 	}
 
 	var out bytes.Buffer
-	if err := jpeg.Encode(&out, img, &jpeg.Options{Quality: imageJPEGQuality()}); err != nil {
+	if err := webp.Encode(&out, img, &webp.Options{Quality: imageQuality()}); err != nil {
 		return nil, err
 	}
 	return out.Bytes(), nil
@@ -201,10 +202,10 @@ func imageMaxDimension() int {
 	return maxDimension
 }
 
-func imageJPEGQuality() int {
-	quality, err := strconv.Atoi(app.Config("IMAGE_JPEG_QUALITY"))
+func imageQuality() float32 {
+	quality, err := strconv.Atoi(app.Config("IMAGE_QUALITY"))
 	if err != nil || quality <= 0 || quality > 100 {
 		quality = 82
 	}
-	return quality
+	return float32(quality)
 }
